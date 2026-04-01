@@ -43,6 +43,11 @@ class BatchClaimsAction
 
             foreach ($batchesByProvider as $provider => $claimsByDate) {
                 foreach ($claimsByDate as $date => $claimsForBatch) {
+                    // Convert array to Collection if needed
+                    if (is_array($claimsForBatch)) {
+                        $claimsForBatch = collect($claimsForBatch);
+                    }
+                    
                     $batch = $this->createBatchIfValid(
                         $insurer,
                         $provider,
@@ -193,8 +198,11 @@ class BatchClaimsAction
                 'status' => 'batched',
             ]);
 
-        // Dispatch notification
-        \App\Notifications\BatchCreatedNotification::dispatch($batch);
+        // Send notification to the first provider in the batch
+        $firstClaim = Claim::find($claimIds[0]);
+        if ($firstClaim && $firstClaim->user) {
+            $firstClaim->user->notify(new \App\Notifications\BatchCreatedNotification($batch));
+        }
 
         return $batch;
     }

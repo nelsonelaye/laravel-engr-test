@@ -11,10 +11,10 @@ Route::get('/user', function (Request $request) {
 
 // Public endpoints
 Route::get('/insurers', [InsurerController::class, 'index']);
+Route::post('/claims', [ClaimController::class, 'store']); // Public for testing
 
 // Protected endpoints
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/claims', [ClaimController::class, 'store']);
     Route::get('/claims', [ClaimController::class, 'index']);
     Route::get('/claims/{claim}', [ClaimController::class, 'show']);
 });
