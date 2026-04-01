@@ -43,7 +43,7 @@ class BatchClaimsAction
 
             foreach ($batchesByProvider as $provider => $claimsByDate) {
                 foreach ($claimsByDate as $date => $claimsForBatch) {
-                    $batch = $this->createBatch(
+                    $batch = $this->createBatchIfValid(
                         $insurer,
                         $provider,
                         $date,
@@ -74,11 +74,11 @@ class BatchClaimsAction
      */
     private function calculateProcessingCost(Claim $claim, Insurer $insurer, Carbon $date): float
     {
-        $baseAmount = 100; // Base processing cost in cents
+        $baseAmount = 100; // Base processing cost in Naira kobo
 
         // Factor 1: Day of month (20% to 50%)
         $dayOfMonth = $date->day;
-        $dayFactor = 0.20 + ($dayOfMonth / 30) * 0.30;
+        $dayFactor = 0.20 + ($dayOfMonth / 30) * 0.30; // first day + other days of the month
 
         // Factor 2: Specialty multiplier
         $specialtyEfficiencies = $insurer->specialty_efficiencies ?? [];
@@ -88,9 +88,9 @@ class BatchClaimsAction
         // Factor 3: Priority multiplier (priority 1-5: 1.0 to 1.4)
         $priorityMultiplier = 1.0 + ($claim->priority_level / 5) * 0.4;
 
-        // Factor 4: Monetary multiplier (scaled by claim value, capped)
+        // Factor 4: Monetary multiplier (scaled by claim value in Naira, capped)
         $claimValue = (float)$claim->total_amount;
-        $monetaryMultiplier = 1.0 + min(($claimValue / 10000) * 0.2, 0.5);
+        $monetaryMultiplier = 1.0 + min(($claimValue / 100000) * 0.2, 0.5);
 
         // Calculate final cost
         $finalCost = $baseAmount * $dayFactor * $specialtyMultiplier * $priorityMultiplier * $monetaryMultiplier;
@@ -129,53 +129,48 @@ class BatchClaimsAction
     }
 
     /**
-     * Create a batch record and link claims to it
+     * Create batch if it meets all constraints, otherwise handle overages
      */
-    private function createBatch(Insurer $insurer, string $provider, string $dateStr, Collection $claims): ?Batch
+    private function createBatchIfValid(Insurer $insurer, string $provider, string $dateStr, Collection $claims): ?Batch
     {
         $batchDate = Carbon::createFromFormat('Y-m-d', $dateStr);
-        $totalCost = 0;
-        $claimIds = [];
-
-        foreach ($claims as $claim) {
-            $totalCost += $claim->processing_cost;
-            $claimIds[] = $claim->id;
-        }
-
-        // Check constraints
+        $claimIds = $claims->pluck('id')->toArray();
+        $totalCost = $claims->sum('processing_cost');
         $claimCount = count($claimIds);
 
-        // Minimum batch size
+        // Check: Minimum batch size
         if ($claimCount < $insurer->min_batch_size) {
             \Log::info("Batch for {$provider} on {$dateStr} has {$claimCount} claims, below min {$insurer->min_batch_size}");
             return null;
         }
 
-        // Maximum batch size
+        // Check: Maximum batch size - split if exceeded
         if ($claimCount > $insurer->max_batch_size) {
-            // Split into multiple batches
+            \Log::info("Batch for {$provider} on {$dateStr} has {$claimCount} claims, exceeds max {$insurer->max_batch_size}. Splitting...");
             $splits = array_chunk($claimIds, $insurer->max_batch_size);
+            $lastBatch = null;
             foreach ($splits as $splitIds) {
-                $this->createBatchRecord($insurer, $provider, $batchDate, $splitIds);
+                $lastBatch = $this->createBatchRecord($insurer, $provider, $batchDate, $splitIds);
             }
-            return null;
+            return $lastBatch;
         }
 
-        // Daily capacity
+        // Check: Daily capacity
         $dailyUsage = Batch::where('insurer_id', $insurer->id)
             ->where('batch_date', $batchDate)
             ->sum('total_cost');
 
         if ($dailyUsage + $totalCost > $insurer->daily_capacity) {
-            \Log::info("Batch for {$provider} on {$dateStr} exceeds daily capacity");
+            \Log::info("Batch for {$provider} on {$dateStr} would exceed daily capacity (₦{$dailyUsage} + ₦{$totalCost} > ₦{$insurer->daily_capacity})");
             return null;
         }
 
+        // All constraints met - create batch
         return $this->createBatchRecord($insurer, $provider, $batchDate, $claimIds);
     }
 
     /**
-     * Create batch record in database
+     * Create batch record in database and update claims
      */
     private function createBatchRecord(Insurer $insurer, string $provider, Carbon $batchDate, array $claimIds): ?Batch
     {

@@ -18,8 +18,8 @@ return new class extends Migration
             $table->date('submission_date')->default(now());
             $table->string('specialty');
             $table->integer('priority_level')->default(3);
-            $table->decimal('total_amount', 10, 2);
-            $table->decimal('processing_cost', 10, 2)->default(0);
+            $table->decimal('total_amount', 12, 2); // in Naira
+            $table->decimal('processing_cost', 12, 2)->default(0); // in Naira
             $table->enum('status', ['pending', 'batched', 'processed'])->default('pending');
             $table->timestamps();
             $table->index(['insurer_id', 'batch_id']);
@@ -30,7 +30,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('claim_id')->constrained('claims')->cascadeOnDelete();
             $table->string('name');
-            $table->decimal('unit_price', 10, 2);
+            $table->decimal('unit_price', 12, 2); // in Naira
             $table->integer('quantity')->default(1);
             $table->timestamps();
         });
@@ -42,7 +42,7 @@ return new class extends Migration
             $table->date('batch_date');
             $table->enum('status', ['pending', 'sent', 'processed'])->default('pending');
             $table->integer('total_claims')->default(0);
-            $table->decimal('total_cost', 10, 2)->default(0);
+            $table->decimal('total_cost', 12, 2)->default(0); // in Naira
             $table->timestamps();
             $table->unique(['insurer_id', 'provider_name', 'batch_date']);
         });

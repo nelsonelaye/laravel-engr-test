@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('code')->unique();
             $table->integer('min_batch_size')->default(1);
             $table->integer('max_batch_size')->default(100);
-            $table->decimal('daily_capacity', 10, 2)->default(10000);
+            $table->decimal('daily_capacity', 12, 2)->default(100000); // in Naira
             $table->enum('preferred_date_type', ['encounter', 'submission'])->default('encounter');
             $table->json('specialty_efficiencies')->default('{}');
             $table->timestamps();
