@@ -6,7 +6,7 @@
             <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-lg sm:rounded-lg">
                     <div class="px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-800">
-                        <h1 class="text-3xl font-bold text-white">Submit Medical Claim</h1>
+                        <h1 class="text-3xl font-bold text-white">Submit Claim</h1>
                         <p class="text-blue-100 mt-2">Fill in the details below to submit a new claim</p>
                     </div>
 
@@ -32,7 +32,7 @@
                                 <input
                                     v-model="form.provider_name"
                                     type="text"
-                                    placeholder="Your provider name"
+                                    placeholder="E.g. Dr. Smith's Clinic"
                                     class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                 />
                                 <span v-if="errors.provider_name" class="text-sm text-red-600">{{ errors.provider_name[0] }}</span>
@@ -173,10 +173,6 @@
                             <p class="text-sm text-red-700">{{ errors.general }}</p>
                         </div>
 
-                        <div v-if="successMessage" class="bg-green-50 border border-green-200 rounded-md p-4">
-                            <p class="text-sm text-green-700">{{ successMessage }}</p>
-                        </div>
-
                         <!-- Submit Button -->
                         <div class="flex gap-4 justify-end">
                             <button
@@ -205,10 +201,19 @@
 import { Head } from "@inertiajs/vue3";
 import { ref, reactive, computed, onMounted } from "vue";
 import axios from "axios";
+import { useToast } from "vue-toastification";
+
+const toast = useToast();
+
+// Configure axios with CSRF token
+const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+if (token) {
+    axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+    axios.defaults.headers.common['Accept'] = 'application/json';
+}
 
 const insurers = ref([]);
 const isSubmitting = ref(false);
-const successMessage = ref("");
 const errors = reactive({});
 
 const form = reactive({
@@ -245,14 +250,12 @@ const resetForm = () => {
     form.specialty = "";
     form.priority_level = 3;
     form.items = [{ name: "", unit_price: 0, quantity: 1 }];
-    successMessage.value = "";
     Object.keys(errors).forEach(key => delete errors[key]);
 };
 
 const submitClaim = async () => {
     isSubmitting.value = true;
     Object.keys(errors).forEach(key => delete errors[key]);
-    successMessage.value = "";
 
     try {
         const response = await axios.post("/api/claims", {
@@ -264,15 +267,17 @@ const submitClaim = async () => {
             items: form.items,
         });
 
-        successMessage.value = `Claim submitted successfully! Claim ID: ${response.data.data.id}`;
+        toast.success(`Claim submitted successfully! Claim ID: ${response.data.data.id}`);
         resetForm();
     } catch (error) {
-        if (error.response && error.response.data.errors) {
+        if (error.response && error.response.status === 401) {
+            errors.general = "You must be logged in to submit a claim. Please log in first.";
+        } else if (error.response && error.response.data.errors) {
             Object.assign(errors, error.response.data.errors);
         } else if (error.response && error.response.data.message) {
             errors.general = error.response.data.message;
         } else {
-            errors.general = "An error occurred while submitting the claim.";
+            errors.general = "An error occurred while submitting the claim. Please try again.";
         }
     } finally {
         isSubmitting.value = false;
