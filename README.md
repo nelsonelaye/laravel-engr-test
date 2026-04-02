@@ -8,6 +8,7 @@ A Laravel + Vue 3 web application that allows healthcare providers to submit med
 
 ✅ **Claim Submission Form:** Healthcare providers can submit medical claims through a simple Vue 3 form  
 ✅ **Optimized Fee Processing:** Automatic total calculation as claim items are added  
+✅ **Smart Claim Batching:** A Greedy + Priority Queue algorithm groups claims into cost-efficient batches per insurer — see [ALGORITHM.md](./ALGORITHM.md) for the full explanation
 
 
 
@@ -69,6 +70,18 @@ php artisan serve
 ```
 
 **Note:** Claim submission requires authentication.
+
+---
+
+## Batching Algorithm
+
+The system uses a **Greedy + Priority Queue** algorithm to group pending claims into optimised batches for each insurer. It sorts claims by processing cost (cheapest first) and fills batches within each insurer's size and daily capacity limits.
+
+- Each insurer can define its own minimum/maximum batch size, daily capacity, date preference, and specialty cost multipliers
+- Claims that can't fit into today's batches are automatically held and retried the next day
+- A success email notification is dispatched to the provider whenever a batch is created
+
+📄 **Full documentation:** [ALGORITHM.md](./ALGORITHM.md)
 
 ---
 
