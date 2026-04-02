@@ -44,4 +44,9 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function claims()
+    {
+        return $this->hasMany(Claim::class);
+    }
 }
