@@ -68,44 +68,32 @@ class BatchClaimsAction
         }
     }
 
-    /**
-     * Calculate processing cost for a claim
-     *
-     * Cost factors:
-     * 1. Day of month (20% on 1st, 50% on 30th)
-     * 2. Specialty multiplier (from insurer's specialty efficiencies)
-     * 3. Priority multiplier (1.0 - 1.4 based on priority 1-5)
-     * 4. Monetary multiplier (scaled by claim value)
-     */
+    /**  Calculate processing cost for a claim with various constraints multipliers **/
     private function calculateProcessingCost(Claim $claim, Insurer $insurer, Carbon $date): float
     {
-        $baseAmount = 100; // Base processing cost in Naira kobo
+        $baseAmount = 10000; // base processing cost: 100 Naira (10,000 kobo)
 
-        // Factor 1: Day of month (20% to 50%)
+        // Day of month multiplier
         $dayOfMonth = $date->day;
         $dayFactor = 0.20 + ($dayOfMonth / 30) * 0.30; // first day + other days of the month
 
-        // Factor 2: Specialty multiplier
+        // sSpecialty multiplier
         $specialtyEfficiencies = $insurer->specialty_efficiencies ?? [];
         $specialtyKey = strtolower(str_replace(' ', '_', $claim->specialty));
         $specialtyMultiplier = $specialtyEfficiencies[$specialtyKey] ?? 1.0;
 
-        // Factor 3: Priority multiplier (priority 1-5: 1.0 to 1.4)
-        $priorityMultiplier = 1.0 + ($claim->priority_level / 5) * 0.4;
+        // Priority multiplier (scaled to 1.0 - 1.2)
+        $priorityMultiplier = 1.0 + ($claim->priority_level / 5) * 0.2; // with a 20% premium
 
-        // Factor 4: Monetary multiplier (scaled by claim value in Naira, capped)
-        $claimValue = (float)$claim->total_amount;
-        $monetaryMultiplier = 1.0 + min(($claimValue / 100000) * 0.2, 0.5);
+   
+        $claimValue = (float)$claim->total_amount; // added to processing cost
 
-        // Calculate final cost
-        $finalCost = $baseAmount * $dayFactor * $specialtyMultiplier * $priorityMultiplier * $monetaryMultiplier;
+        // final cost: base processing cost + claim value
+        $finalCost = ($baseAmount * $dayFactor * $specialtyMultiplier * $priorityMultiplier) + $claimValue;
 
         return (float)$finalCost;
     }
 
-    /**
-     * Group claims into batches respecting constraints
-     */
     private function groupClaimsIntoBatches(Collection $claims, Insurer $insurer): array
     {
         $batchesByProvider = [];

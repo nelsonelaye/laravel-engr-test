@@ -16,7 +16,7 @@ Route::get('/', function () {
 
 Route::get('/submit-claim', function () {
     return Inertia::render('SubmitClaim');
-});
+})->middleware(['auth', 'verified'])->name('submit-claim');
 
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');

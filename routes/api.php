@@ -11,7 +11,7 @@ Route::get('/user', function (Request $request) {
 
 // Public endpoints
 Route::get('/insurers', [InsurerController::class, 'index']);
-Route::post('/claims', [ClaimController::class, 'store']); // Public for testing
+// Route::post('/claims', [ClaimController::class, 'store']); 
 
 // Protected endpoints
 Route::middleware('auth:sanctum')->group(function () {
