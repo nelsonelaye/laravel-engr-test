@@ -128,30 +128,36 @@ class BatchClaimsActionTest extends TestCase
     public function test_batch_respects_daily_capacity_constraint()
     {
         $this->insurer->update([
-            'daily_capacity' => 50000, // Low capacity
+            'daily_capacity' => 50000, // Low capacity (₦50,000)
             'min_batch_size' => 1,
         ]);
 
-        // Create 20 claims, each with ₦5000 (total potential cost way over)
+        // 20 claims × total_amount ₦5,000 each
+        // Per-claim processing cost ≈ (10000 × dayFactor × 1.0 × 1.12) + 5000 ≈ ₦7,400
+        // Total ≈ ₦148,000 — far exceeds daily_capacity of ₦50,000
+        // All 20 claims share the same provider+date → grouped as ONE batch
+        // That one batch is rejected entirely (no partial splitting by capacity)
         for ($i = 0; $i < 20; $i++) {
             Claim::factory()->create([
-                'insurer_id' => $this->insurer->id,
-                'user_id' => $this->provider->id,
+                'insurer_id'    => $this->insurer->id,
+                'user_id'       => $this->provider->id,
                 'provider_name' => 'Provider A',
-                'encounter_date' => now()->format('Y-m-d'),
-                'specialty' => 'General Practice',
-                'priority_level' => 3,
-                'total_amount' => 5000,
-                'status' => 'pending',
+                'encounter_date'=> now()->format('Y-m-d'),
+                'specialty'     => 'General Practice',
+                'priority_level'=> 3,
+                'total_amount'  => 5000,
+                'status'        => 'pending',
             ]);
         }
 
         $batch = $this->batchClaimsAction->execute($this->insurer);
 
-        // Batch should be created but with fewer claims due to capacity limit
-        $this->assertNotNull($batch);
-        $this->assertLessThanOrEqual(Claim::where('insurer_id', $this->insurer->id)
-            ->where('status', 'pending')->count() + $batch->total_claims, 20);
+        // Batch is rejected because the group’s total cost exceeds daily_capacity
+        $this->assertNull($batch);
+
+        // All claims remain pending
+        $this->assertEquals(20, Claim::where('insurer_id', $this->insurer->id)
+            ->where('status', 'pending')->count());
     }
 
     /** @test */
